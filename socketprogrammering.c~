@@ -28,12 +28,7 @@
 void server();
 void client();
 void readInput();
-//char *splitInput[](char input[]);
-char **getCommand();
-
-
-
-
+char *splitInput[](char input[]);
 
 void error(const char *msg)
 {
@@ -104,16 +99,15 @@ void client(int argc, char *argv[])
 {
     char input[64];
 	printf("this is a client!!\n Now tell me what you want to do, if you need help, write \"help\"\n");
-    //fgets(input, sizeof(input), stdin);
-    char **commands;
+    fgets(input, sizeof(input), stdin);
+    char *result[10];
 
-    commands = getCommand();
+    result = splitInput(input);
 
     int i = 0;
-    while(commands[i] != NULL)
+    for(i; i < 10; i++)
     {
-        printf("%s\n", commands[i]);
-        i++;
+        printf(result[i]+'\n');
     }
 
     printf(input);
@@ -157,24 +151,16 @@ void client(int argc, char *argv[])
 	close(sockfd);
 }
 
-char **getCommand()
+/*char *splitInput[](char input[])
 {
-    int command_num;
-    char input[BUFSIZ];
-    char **commandArray;
+    char *partResult;
+    int nrOfAddedSubstrings = 0;
 
-    command_num = 0;
-    commandArray = (char**) malloc (BUFSIZ * sizeof(char));
+    partResult = strtok (input, " ");
 
-    fgets(input,sizeof(input),stdin);
-    commandArray[command_num] = strtok(input, " "); /*breaks a string of commands into
-                                                      tokens*/
-    while (commandArray[command_num]!= NULL)
-    {
-        command_num++;
-        commandArray[command_num] = strtok (NULL, " ");
+    while(partResult != NULL) {
+        strncpy(&partResult[nrOfAddedSubstrings], partResult, sizeof(partResult));
+        //result[nrOfAddedSubstrings] = partResult[nrOfAddedSubstrings++];
+        partResult = strtok(NULL, " ");
     }
-
-    commandArray[command_num] = NULL;  /*very imp - adds null in the last position*/
-    return commandArray;
 }
