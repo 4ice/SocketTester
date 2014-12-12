@@ -27,8 +27,6 @@
 #include <ifaddrs.h>
 #include <arpa/inet.h>
 #include <linux/if_link.h>
-#include <time.h>
-#include <sys/time.h>
 
 void server();
 void client();
@@ -38,7 +36,7 @@ void cmdClientHelp();
 void cmdServerHelp();
 char *getIp();
 void sendPacket(int protocol, char *host, int portno, int packetSize, long fileSize);
-void recieveMeessage(int protocol, int portno, int packetSize, long fileSize);
+void recieveMeessage(int protocol, int portno, int size);
 
 
 //for the use of bool
@@ -46,7 +44,7 @@ typedef int bool;
 #define true 1;
 #define false 0;
 
-long int sizeToRecieve;
+
 
 void error(const char *msg)
 {
@@ -60,7 +58,6 @@ int main(int argc, char *argv[])
 		fprintf(stderr, "ERROR: the amount of parameters must be atleast 2");
 		exit(1);
 	}
-
 	if(strcmp(argv[1], "-s") == 0) {
 		server(argc, argv);
 	}
@@ -95,7 +92,7 @@ void server(int argc, char *argv[])
 		else if(strcmp(commands[i], "--listen") == 0)
 		{
 			i++;
-			if(commands[i+3] == NULL)
+			if(commands[i+2] == NULL)
 			{
 				error("ERROR: to few parameters");
 				commands[i] = NULL;
@@ -105,13 +102,13 @@ void server(int argc, char *argv[])
 				//TCP
 				if(strcmp(commands[i], "t") == 0)
 				{
-					recieveMeessage(1, strtol(commands[i+1], NULL, 10), strtol(commands[i+2], NULL, 10), strtol(commands[i+3], NULL, 10));
-					i = i+4;
+					recieveMeessage(1, strtol(commands[i+1], NULL, 10), strtol(commands[i+2], NULL, 10));
+					i = i+2;
 				}
 				else if(strcmp(commands[i], "u") == 0)
 				{
-					recieveMeessage(0, strtol(commands[i+1], NULL, 10), strtol(commands[i+2], NULL, 10), strtol(commands[i+3], NULL, 10));
-					i = i+4;
+					recieveMeessage(0, strtol(commands[i+1], NULL, 10), strtol(commands[i+2], NULL, 10));
+					i = i+2;
 				}
 				else
 					error("ERROR: not a valid protocol");
@@ -259,12 +256,12 @@ char **getCommand()
 void cmdClientHelp()
 {
 	printf("****\nHELP\n****\n");
-	printf("--help \t\t\t\t\t\t\tShows this help text.\n");
+	printf("--help \t\t\t\t\tShows this help text.\n");
 
 	printf("--send [t/u} [hostIP] [port] [packetSize] [fileSize] \tSends a packet to given host, port and packetsize\n");
-	printf("\tt \t\t\t\t\t\tTCP protocol\n");
-	printf("\tu \t\t\t\t\t\tUDP protocol\n\n");
-	printf("--quit \t\t\t\t\t\t\tclose the program\n");
+	printf("\tt \t\t\t\tTCP protocol\n");
+	printf("\tu \t\t\t\tUDP protocol\n\n");
+	printf("--quit \t\t\t\t\tclose the program\n");
 }
 
 void cmdServerHelp()
@@ -272,7 +269,7 @@ void cmdServerHelp()
 	printf("****\nHELP\n****\n");
 	printf("--help \t\t\t\t\tShows this help text.\n");
 
-	printf("--listen [t/u} [port] [packetSize]\tListen for packet, given protocol and port\n");
+	printf("--listen [t/u} [port] [packetSize]\t\tListen for packet, given protocol and port\n");
 	printf("\tt \t\t\t\tTCP protocol\n");
 	printf("\tu \t\t\t\tUDP protocol\n\n");
 	printf("--quit \t\t\t\t\tclose the program\n");
@@ -307,7 +304,6 @@ void sendPacket(int protocol, char *host, int portno, int packetSize, long fileS
     struct sockaddr_in serv_addr;
     struct hostent *server;
 
-    struct timeval tval_before, tval_after, tval_result;
 
 
 
@@ -325,7 +321,6 @@ void sendPacket(int protocol, char *host, int portno, int packetSize, long fileS
 	    //TCP
 	    sockfd = socket(AF_INET, SOCK_STREAM, 0);
     }
-
     //Check if the socket could be opened
     if (sockfd < 0)
     {
@@ -353,26 +348,24 @@ void sendPacket(int protocol, char *host, int portno, int packetSize, long fileS
     //Try to connect to the host
     if (connect(sockfd,(struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
 	    error("ERROR connecting");
-    long int currentlySent = 0;
-    gettimeofday(&tval_before, NULL);
-    while(fileSize > currentlySent)
+    while(fileSize > 0)
     {
 	    n = write(sockfd, buffer, strlen(buffer));
-        if (n < 0)
-            error("ERROR");
-        currentlySent += n;
+	    if(n < 0)
+		    error("ERROR writing to socket");
+	    fileSize = fileSize-packetSize;
     }
-    gettimeofday(&tval_after, NULL);
-    timersub(&tval_after, &tval_before, &tval_result);
-
-    printf("Time for sending: %ld.%06ld\n", (long int)tval_result.tv_sec, (long int)tval_result.tv_usec);
+    n = write(sockfd, "b", 1);
+    if(n < 0)
+	    error("ERROR writing to socket");
 
     //Close the connection
     close(sockfd);
 }
 
-void recieveMeessage(int protocol, int portno, int packetSize, long fileSize)
+void recieveMeessage(int protocol, int portno, int size)
 {
+	time_t ticks;
 
     	printf("-----Server information-----\n");
 
@@ -398,46 +391,50 @@ void recieveMeessage(int protocol, int portno, int packetSize, long fileSize)
 
 
     	printf("Protocol:\t%s\n", protocolName);
-	    printf("Port:\t\t%i\n", portno);
-	    printf("PacketLength\t%i\n", packetSize);
-	    printf("----------------------------\n");
+	printf("Port:\t\t%i\n", portno);
+	printf("PacketLength\t%i\n", size);
+	printf("----------------------------\n");
 
 
-	    int sockfd, newsockfd, clilen;
-        char buffer[packetSize];
+	int sockfd, newsockfd, clilen;
+        char buffer[size];
         struct sockaddr_in serv_addr, cli_addr;
         int n;
 
         sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if (sockfd < 0) 
-            error("ERROR opening socket");
+           error("ERROR opening socket");
 	
-	    memset(&serv_addr, 0, sizeof(struct sockaddr_in));
+	memset(&serv_addr, 0, sizeof(struct sockaddr_in));
 
         serv_addr.sin_family = AF_INET;
         serv_addr.sin_addr.s_addr = INADDR_ANY;
         serv_addr.sin_port = htons(portno);
         
-	    if (bind(sockfd, (struct sockaddr *) &serv_addr,
+	if (bind(sockfd, (struct sockaddr *) &serv_addr,
                  sizeof(serv_addr)) < 0) 
                  error("ERROR on binding");
         
-	    listen(sockfd,5);
+	listen(sockfd,5);
         
-	    clilen = sizeof(cli_addr);
-	    bool keepListen = true;
-        long int currentlyRecieved = 0;
+	clilen = sizeof(cli_addr);
+	ticks = time(NULL);
+	bool keepListen = true;
+	while(keepListen)
+	{
+        	newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
+		
+		memset(buffer, 0, size);
+        	n = read(newsockfd,buffer,size-1);
+		if(strcmp(buffer, "b") == 0)
+		{
+			keepListen = false;
+		}
+		printf("%s\n\n", buffer);
+	}
 
-        newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-	    while(fileSize > currentlyRecieved)
-	    {
-		    memset(buffer, 0, packetSize);
-        	n = read(newsockfd,buffer,packetSize-1);
-            currentlyRecieved += n;
-	    }
+        printf("Here is the message: %s\n",buffer);
 
-        printf("Message delivered\n");
-
-	    close(newsockfd);
-	    close(sockfd);
+	close(newsockfd);
+	close(sockfd);
 }
