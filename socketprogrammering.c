@@ -350,14 +350,24 @@ void sendPacket(int protocol, char *host, int portno, int packetSize, long fileS
        		    server->h_length);
     //Add the port number
     serv_addr.sin_port = htons(portno);
+    if(protocol == 1)
+    {
+        if (connect(sockfd,(struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
+            error("ERROR connecting");
+    }
     //Try to connect to the host
-    if (connect(sockfd,(struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
-	    error("ERROR connecting");
     long int currentlySent = 0;
     gettimeofday(&tval_before, NULL);
     while(fileSize > currentlySent)
     {
-	    n = write(sockfd, buffer, strlen(buffer));
+        if(protocol == 1)
+        {
+	        n = write(sockfd, buffer, strlen(buffer));
+        }
+        else if(protocol == 0)
+        {
+            n = sendto(sockfd, buffer, strlen(buffer), 0, (struct sockaddr *) &serv_addr, sizeof(serv_addr));
+        }
         if (n < 0)
             error("ERROR");
         currentlySent += n;
@@ -407,8 +417,14 @@ void recieveMeessage(int protocol, int portno, int packetSize, long fileSize)
         char buffer[packetSize];
         struct sockaddr_in serv_addr, cli_addr;
         int n;
-
-        sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        if(protocol == 1)
+        {
+            sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        }
+        else if(protocol == 0)
+        {
+            sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+        }
         if (sockfd < 0) 
             error("ERROR opening socket");
 	
@@ -428,11 +444,21 @@ void recieveMeessage(int protocol, int portno, int packetSize, long fileSize)
 	    bool keepListen = true;
         long int currentlyRecieved = 0;
 
-        newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
+        if(protocol == 1)
+        {
+            newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
+        }
 	    while(fileSize > currentlyRecieved)
 	    {
-		    memset(buffer, 0, packetSize);
-        	n = read(newsockfd,buffer,packetSize-1);
+            memset(buffer, 0, packetSize);
+            if(protocol == 1)
+            {
+        	    n = read(newsockfd,buffer,packetSize-1);
+            }
+            else if(protocol == 0)
+            {
+                n = recvfrom(newsockfd, buffer, packetSize-1, 0, (struct sockaddr *) &cli_addr, &clilen);
+            }
             currentlyRecieved += n;
 	    }
 
